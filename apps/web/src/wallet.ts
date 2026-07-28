@@ -33,6 +33,8 @@ type InjectedProvider = EIP1193Provider & {
 };
 
 type ProviderError = Error & { code?: number };
+class WalletRequestTimeoutError extends Error {}
+
 type Eip6963ProviderDetail = {
   info: {
     name: string;
@@ -72,10 +74,9 @@ async function injectedProvider(): Promise<InjectedProvider> {
   await new Promise((resolve) => window.setTimeout(resolve, 150));
   window.removeEventListener("eip6963:announceProvider", onProvider);
 
-  const metamask = announced.find(
-    ({ info, provider }) =>
-      provider.isMetaMask || info.rdns.toLowerCase() === "io.metamask",
-  );
+  const metamask =
+    announced.find(({ info }) => info.rdns.toLowerCase() === "io.metamask") ||
+    announced.find(({ provider }) => provider.isMetaMask);
   activeProvider = metamask?.provider || legacyProvider() || announced[0]?.provider;
 
   if (!activeProvider) {
@@ -85,6 +86,23 @@ async function injectedProvider(): Promise<InjectedProvider> {
   }
 
   return activeProvider;
+}
+
+async function withWalletTimeout<T>(request: Promise<T>): Promise<T> {
+  let timeout: number | undefined;
+  try {
+    return await Promise.race([
+      request,
+      new Promise<never>((_resolve, reject) => {
+        timeout = window.setTimeout(
+          () => reject(new WalletRequestTimeoutError()),
+          20_000,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) window.clearTimeout(timeout);
+  }
 }
 
 function connectionError(error: ProviderError) {
@@ -105,8 +123,16 @@ export async function connectBrowserWallet(): Promise<Address> {
   let accounts: unknown;
 
   try {
-    accounts = await provider.request({ method: "eth_requestAccounts" });
+    accounts = await withWalletTimeout(
+      provider.request({ method: "eth_requestAccounts" }),
+    );
   } catch (caught) {
+    if (caught instanceof WalletRequestTimeoutError) {
+      activeProvider = undefined;
+      throw new Error(
+        "MetaMask did not respond. Open and unlock MetaMask, confirm it is enabled for localhost, then try again.",
+      );
+    }
     const error = caught as ProviderError;
     throw new Error(connectionError(error));
   }
