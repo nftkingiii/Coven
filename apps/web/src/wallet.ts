@@ -18,10 +18,10 @@ export const monadTestnet = defineChain({
   },
   blockExplorers: {
     default: {
-      name: "MonadVision",
+      name: "Monadscan",
       url:
         import.meta.env.VITE_MONAD_EXPLORER_URL ||
-        "https://testnet.monadvision.com",
+        "https://testnet.monadscan.com",
     },
   },
   testnet: true,
@@ -33,6 +33,14 @@ type InjectedProvider = EIP1193Provider & {
 };
 
 type ProviderError = Error & { code?: number };
+type Eip6963ProviderDetail = {
+  info: {
+    name: string;
+    rdns: string;
+    uuid: string;
+  };
+  provider: InjectedProvider;
+};
 
 declare global {
   interface Window {
@@ -40,29 +48,67 @@ declare global {
   }
 }
 
-function injectedProvider(): InjectedProvider {
-  if (!window.ethereum) {
+let activeProvider: InjectedProvider | undefined;
+
+function legacyProvider() {
+  const injected = window.ethereum;
+  if (!injected) return undefined;
+  return injected.providers?.find((provider) => provider.isMetaMask) || injected;
+}
+
+async function injectedProvider(): Promise<InjectedProvider> {
+  if (activeProvider) return activeProvider;
+
+  const announced: Eip6963ProviderDetail[] = [];
+  const onProvider = (event: Event) => {
+    const detail = (event as CustomEvent<Eip6963ProviderDetail>).detail;
+    if (detail?.provider && !announced.some(({ info }) => info.uuid === detail.info.uuid)) {
+      announced.push(detail);
+    }
+  };
+
+  window.addEventListener("eip6963:announceProvider", onProvider);
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  await new Promise((resolve) => window.setTimeout(resolve, 150));
+  window.removeEventListener("eip6963:announceProvider", onProvider);
+
+  const metamask = announced.find(
+    ({ info, provider }) =>
+      provider.isMetaMask || info.rdns.toLowerCase() === "io.metamask",
+  );
+  activeProvider = metamask?.provider || legacyProvider() || announced[0]?.provider;
+
+  if (!activeProvider) {
     throw new Error(
-      "No browser wallet detected. Open Coven in the browser where MetaMask is installed, then refresh.",
+      "No browser wallet detected. Open Coven in Chrome where MetaMask is installed and enabled, then refresh.",
     );
   }
 
-  const providers = window.ethereum.providers;
-  return providers?.find((provider) => provider.isMetaMask) || window.ethereum;
+  return activeProvider;
+}
+
+function connectionError(error: ProviderError) {
+  if (error.code === 4001) {
+    return "Wallet connection was rejected. Approve the request in MetaMask to continue.";
+  }
+  if (error.code === -32002) {
+    return "A wallet request is already waiting. Open MetaMask and approve or cancel the pending request.";
+  }
+  if (error.code === 4100) {
+    return "MetaMask has not authorized Coven. Open MetaMask, connect this site, then try again.";
+  }
+  return error.message || "The wallet could not be connected.";
 }
 
 export async function connectBrowserWallet(): Promise<Address> {
-  const provider = injectedProvider();
+  const provider = await injectedProvider();
   let accounts: unknown;
 
   try {
     accounts = await provider.request({ method: "eth_requestAccounts" });
   } catch (caught) {
     const error = caught as ProviderError;
-    if (error.code === 4001) {
-      throw new Error("Wallet connection was rejected. Approve the request in MetaMask to continue.");
-    }
-    throw new Error(error.message || "The wallet could not be connected.");
+    throw new Error(connectionError(error));
   }
 
   const account = Array.isArray(accounts) ? accounts[0] : undefined;
@@ -74,7 +120,7 @@ export async function connectBrowserWallet(): Promise<Address> {
 }
 
 export async function switchToMonadTestnet(): Promise<void> {
-  const provider = injectedProvider();
+  const provider = await injectedProvider();
   const chainId = `0x${monadTestnet.id.toString(16)}`;
   const activeChain = await provider.request({ method: "eth_chainId" });
   if (activeChain === chainId) return;
