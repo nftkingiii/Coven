@@ -1,8 +1,5 @@
 services:
   coven-prover:
-    build:
-      context: .
-      dockerfile: apps/prover/Dockerfile
     image: ghcr.io/nftkingiii/coven-prover:latest
     init: true
     restart: unless-stopped
@@ -10,7 +7,7 @@ services:
       PORT: "8080"
       PROVER_THREADS: "2"
       PHALA_CVM: "true"
-      COVEN_WEB_ORIGIN: "${COVEN_WEB_ORIGIN}"
+      COVEN_WEB_ORIGIN: "http://localhost:5173"
     volumes:
       - /var/run/dstack.sock:/var/run/dstack.sock
     ports:
