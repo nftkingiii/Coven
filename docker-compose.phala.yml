@@ -11,5 +11,7 @@ services:
       PROVER_THREADS: "2"
       PHALA_CVM: "true"
       COVEN_WEB_ORIGIN: "${COVEN_WEB_ORIGIN}"
+    volumes:
+      - /var/run/dstack.sock:/var/run/dstack.sock
     ports:
       - "8080:8080"
