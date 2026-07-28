@@ -1,6 +1,11 @@
 import { FormEvent, useEffect, useState } from "react";
 import type { BrowserProof } from "./remote-proof";
-import { connectBrowserWallet, switchToMonadTestnet } from "./wallet";
+import {
+  connectBrowserWallet,
+  listBrowserWallets,
+  switchToMonadTestnet,
+  type BrowserWallet,
+} from "./wallet";
 
 const demoWallet = "0x1111111111111111111111111111111111111111";
 const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8787";
@@ -355,6 +360,8 @@ export default function App() {
   const [busy, setBusy] = useState<"" | "wallet" | "network" | "cvi" | "proof" | "cva">("");
   const [error, setError] = useState("");
   const [walletError, setWalletError] = useState("");
+  const [walletOptions, setWalletOptions] = useState<BrowserWallet[]>([]);
+  const [walletPickerOpen, setWalletPickerOpen] = useState(false);
   const [networkReady, setNetworkReady] = useState(false);
   const [deskTab, setDeskTab] = useState<DeskTab>("issuance");
 
@@ -376,7 +383,34 @@ export default function App() {
     setError("");
     setWalletError("");
     try {
-      const account = await connectBrowserWallet();
+      const wallets = await listBrowserWallets();
+      if (wallets.length === 0) {
+        throw new Error(
+          "No compatible EVM wallet was detected. Enable your wallet extension for localhost, then refresh.",
+        );
+      }
+      if (wallets.length > 1) {
+        setWalletOptions(wallets);
+        setWalletPickerOpen(true);
+        return;
+      }
+      await connectWalletOption(wallets[0]);
+    } catch (caught) {
+      setWalletError(
+        caught instanceof Error ? caught.message : "Wallet discovery failed",
+      );
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function connectWalletOption(option: BrowserWallet) {
+    setBusy("wallet");
+    setWalletPickerOpen(false);
+    setError("");
+    setWalletError("");
+    try {
+      const account = await connectBrowserWallet(option.id);
       setWallet(account);
       setCvi(null);
       setProof(null);
@@ -568,14 +602,55 @@ export default function App() {
                 {busy === "network" ? "Switching…" : "Switch to Monad"}
               </button>
             )}
-            <button className="wallet-control" onClick={connectWallet} disabled={!!busy}>
-              <span className={connected ? "wallet-dot connected" : "wallet-dot"} />
-              {busy === "wallet"
-                ? "Connecting…"
-                : connected
-                  ? short(wallet, 6, 4)
-                  : "Connect wallet"}
-            </button>
+            <div className="wallet-menu">
+              <button
+                className="wallet-control"
+                onClick={connectWallet}
+                disabled={!!busy}
+                aria-expanded={walletPickerOpen}
+              >
+                <span className={connected ? "wallet-dot connected" : "wallet-dot"} />
+                {busy === "wallet"
+                  ? "Connecting…"
+                  : connected
+                    ? short(wallet, 6, 4)
+                    : "Connect wallet"}
+              </button>
+              {walletPickerOpen && (
+                <div className="wallet-picker" role="dialog" aria-label="Choose a wallet">
+                  <div className="wallet-picker-head">
+                    <div>
+                      <strong>Choose a wallet</strong>
+                      <span>Select any detected EVM wallet.</span>
+                    </div>
+                    <button
+                      onClick={() => setWalletPickerOpen(false)}
+                      aria-label="Close wallet chooser"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="wallet-options">
+                    {walletOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        onClick={() => connectWalletOption(option)}
+                        disabled={!!busy}
+                      >
+                        <span className="wallet-option-mark">
+                          {option.name.slice(0, 1).toUpperCase()}
+                        </span>
+                        <span>
+                          <strong>{option.name}</strong>
+                          <small>{option.rdns}</small>
+                        </span>
+                        <ArrowIcon />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

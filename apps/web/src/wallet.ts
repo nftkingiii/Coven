@@ -44,6 +44,16 @@ type Eip6963ProviderDetail = {
   provider: InjectedProvider;
 };
 
+export type BrowserWallet = {
+  id: string;
+  name: string;
+  rdns: string;
+};
+
+type DiscoveredWallet = BrowserWallet & {
+  provider: InjectedProvider;
+};
+
 declare global {
   interface Window {
     ethereum?: InjectedProvider;
@@ -51,16 +61,15 @@ declare global {
 }
 
 let activeProvider: InjectedProvider | undefined;
+let discoveredWallets: DiscoveredWallet[] = [];
 
-function legacyProvider() {
+function legacyProviders() {
   const injected = window.ethereum;
-  if (!injected) return undefined;
-  return injected.providers?.find((provider) => provider.isMetaMask) || injected;
+  if (!injected) return [];
+  return injected.providers?.length ? injected.providers : [injected];
 }
 
-async function injectedProvider(): Promise<InjectedProvider> {
-  if (activeProvider) return activeProvider;
-
+async function discoverWallets(): Promise<DiscoveredWallet[]> {
   const announced: Eip6963ProviderDetail[] = [];
   const onProvider = (event: Event) => {
     const detail = (event as CustomEvent<Eip6963ProviderDetail>).detail;
@@ -74,14 +83,45 @@ async function injectedProvider(): Promise<InjectedProvider> {
   await new Promise((resolve) => window.setTimeout(resolve, 150));
   window.removeEventListener("eip6963:announceProvider", onProvider);
 
-  const metamask =
-    announced.find(({ info }) => info.rdns.toLowerCase() === "io.metamask") ||
-    announced.find(({ provider }) => provider.isMetaMask);
-  activeProvider = metamask?.provider || legacyProvider() || announced[0]?.provider;
+  const wallets: DiscoveredWallet[] = announced.map(({ info, provider }) => ({
+    id: info.uuid,
+    name: info.name,
+    rdns: info.rdns,
+    provider,
+  }));
+
+  legacyProviders().forEach((provider, index) => {
+    if (wallets.some((wallet) => wallet.provider === provider)) return;
+    wallets.push({
+      id: `legacy-${index}`,
+      name: provider.isMetaMask ? "MetaMask" : `Browser wallet ${index + 1}`,
+      rdns: "legacy.injected",
+      provider,
+    });
+  });
+
+  return wallets;
+}
+
+export async function listBrowserWallets(): Promise<BrowserWallet[]> {
+  discoveredWallets = await discoverWallets();
+  return discoveredWallets.map(({ id, name, rdns }) => ({ id, name, rdns }));
+}
+
+async function injectedProvider(walletId?: string): Promise<InjectedProvider> {
+  if (walletId) {
+    if (!discoveredWallets.length) discoveredWallets = await discoverWallets();
+    activeProvider = discoveredWallets.find(({ id }) => id === walletId)?.provider;
+  }
+
+  if (!activeProvider) {
+    if (!discoveredWallets.length) discoveredWallets = await discoverWallets();
+    activeProvider = discoveredWallets[0]?.provider;
+  }
 
   if (!activeProvider) {
     throw new Error(
-      "No browser wallet detected. Open Coven in Chrome where MetaMask is installed and enabled, then refresh.",
+      "No compatible browser wallet detected. Open Coven where an EVM wallet extension is installed and enabled, then refresh.",
     );
   }
 
@@ -107,19 +147,19 @@ async function withWalletTimeout<T>(request: Promise<T>): Promise<T> {
 
 function connectionError(error: ProviderError) {
   if (error.code === 4001) {
-    return "Wallet connection was rejected. Approve the request in MetaMask to continue.";
+    return "Wallet connection was rejected. Approve the request in your wallet to continue.";
   }
   if (error.code === -32002) {
-    return "A wallet request is already waiting. Open MetaMask and approve or cancel the pending request.";
+    return "A wallet request is already waiting. Open your wallet and approve or cancel the pending request.";
   }
   if (error.code === 4100) {
-    return "MetaMask has not authorized Coven. Open MetaMask, connect this site, then try again.";
+    return "Your wallet has not authorized Coven. Open the wallet, connect this site, then try again.";
   }
   return error.message || "The wallet could not be connected.";
 }
 
-export async function connectBrowserWallet(): Promise<Address> {
-  const provider = await injectedProvider();
+export async function connectBrowserWallet(walletId?: string): Promise<Address> {
+  const provider = await injectedProvider(walletId);
   let accounts: unknown;
 
   try {
@@ -130,7 +170,7 @@ export async function connectBrowserWallet(): Promise<Address> {
     if (caught instanceof WalletRequestTimeoutError) {
       activeProvider = undefined;
       throw new Error(
-        "MetaMask did not respond. Open and unlock MetaMask, confirm it is enabled for localhost, then try again.",
+        "The selected wallet did not respond. Open and unlock it, confirm it is enabled for localhost, then try again.",
       );
     }
     const error = caught as ProviderError;
@@ -139,7 +179,7 @@ export async function connectBrowserWallet(): Promise<Address> {
 
   const account = Array.isArray(accounts) ? accounts[0] : undefined;
   if (typeof account !== "string" || !/^0x[a-fA-F0-9]{40}$/.test(account)) {
-    throw new Error("MetaMask did not return a valid account.");
+    throw new Error("The selected wallet did not return a valid account.");
   }
 
   return account as Address;
@@ -159,10 +199,10 @@ export async function switchToMonadTestnet(): Promise<void> {
   } catch (caught) {
     const error = caught as ProviderError;
     if (error.code === 4001) {
-      throw new Error("Monad network switching was rejected in MetaMask.");
+      throw new Error("Monad network switching was rejected in your wallet.");
     }
     if (error.code !== 4902) {
-      throw new Error(error.message || "MetaMask could not switch to Monad Testnet.");
+      throw new Error(error.message || "The wallet could not switch to Monad Testnet.");
     }
 
     try {
@@ -181,9 +221,9 @@ export async function switchToMonadTestnet(): Promise<void> {
     } catch (addCaught) {
       const addError = addCaught as ProviderError;
       if (addError.code === 4001) {
-        throw new Error("Adding Monad Testnet was rejected in MetaMask.");
+        throw new Error("Adding Monad Testnet was rejected in your wallet.");
       }
-      throw new Error(addError.message || "MetaMask could not add Monad Testnet.");
+      throw new Error(addError.message || "The wallet could not add Monad Testnet.");
     }
   }
 }
