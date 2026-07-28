@@ -1,0 +1,14 @@
+{
+  "name": "coven",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "concurrently -n web,api -c cyan,magenta \"npm run dev -w @coven/web\" \"npm run dev -w @coven/api\"",
+    "build": "npm run build -w @coven/api && npm run build -w @coven/prover && npm run build -w @coven/web",
+    "typecheck": "npm run typecheck -w @coven/api && npm run typecheck -w @coven/prover && npm run typecheck -w @coven/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

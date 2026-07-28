@@ -1,0 +1,6 @@
+invoice_value = "150000"
+days_to_maturity = "96"
+invoice_id = "42"
+salt = "987654321"
+max_invoice_value = "100000"
+max_days_to_maturity = "180"

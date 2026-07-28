@@ -1,0 +1,15 @@
+services:
+  coven-prover:
+    build:
+      context: .
+      dockerfile: apps/prover/Dockerfile
+    image: ghcr.io/nftkingiii/coven-prover:latest
+    init: true
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      PROVER_THREADS: "2"
+      PHALA_CVM: "true"
+      COVEN_WEB_ORIGIN: "${COVEN_WEB_ORIGIN}"
+    ports:
+      - "8080:8080"
