@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import type { BrowserProof } from "./zk";
+import type { BrowserProof } from "./remote-proof";
 import { connectBrowserWallet, switchToMonadTestnet } from "./wallet";
 
 const demoWallet = "0x1111111111111111111111111111111111111111";
@@ -109,7 +109,7 @@ function Landing({ openDesk }: { openDesk: () => void }) {
         </div>
         <div className="hero-proof">
           <span>Private execution</span>
-          <strong>Your browser</strong>
+          <strong>Phala TEE</strong>
           <i />
           <span>Public settlement</span>
           <strong>Monad</strong>
@@ -121,6 +121,7 @@ function Landing({ openDesk }: { openDesk: () => void }) {
         <strong>Cleanverse CVI</strong>
         <strong>Noir ZK</strong>
         <strong>Cleanverse CVA</strong>
+        <strong>Phala TEE</strong>
         <strong>Monad</strong>
       </section>
 
@@ -153,14 +154,15 @@ function Landing({ openDesk }: { openDesk: () => void }) {
               <strong>••••••••</strong>
               <span>Maturity</span>
               <strong>•• / •• / ••••</strong>
-              <div><i /> Kept in browser</div>
+              <div><i /> Protected in a TEE</div>
             </div>
             <div>
               <p className="eyebrow">Private policy proof</p>
-              <h3>Terms stay local. Compliance travels.</h3>
+              <h3>Terms stay confidential. Compliance travels.</h3>
               <p>
-                Noir proves value and maturity limits locally. Only a
-                commitment, nullifier, and valid policy result leave the device.
+                An attested Phala prover checks value and maturity limits with
+                Noir. Only the proof, commitment, nullifier, and policy result
+                return for settlement.
               </p>
             </div>
           </article>
@@ -231,7 +233,7 @@ function ProofsView({
       </div>
       {proof ? (
         <article className="record-card">
-          <div className="record-status"><CheckIcon /> Locally verified</div>
+          <div className="record-status"><CheckIcon /> Verified in Phala</div>
           <div>
             <span className="record-label">Invoice reference</span>
             <strong>{invoiceId}</strong>
@@ -461,7 +463,7 @@ export default function App() {
         setProgress,
       );
       setProof(result);
-      setProgress("Proof verified locally");
+      setProgress("Proof verified inside the Phala TEE");
     } catch (caught) {
       setProgress("");
       setError(caught instanceof Error ? caught.message : "Proof generation failed");
@@ -537,8 +539,8 @@ export default function App() {
         <div className="sidebar-bottom">
           <div className="privacy-note">
             <ShieldMark />
-            <strong>Local privacy boundary</strong>
-            <p>Invoice terms never leave this browser.</p>
+            <strong>Confidential proving boundary</strong>
+            <p>Invoice terms travel over HTTPS only to the attested Phala CVM.</p>
           </div>
           <a className="back-link" href="#home">← Back to overview</a>
         </div>
@@ -694,7 +696,7 @@ export default function App() {
                 <span>02</span>
                 <div>
                   <h3>Add private invoice terms</h3>
-                  <p>These inputs are used locally to create the proof witness.</p>
+                  <p>These inputs are sent to the confidential prover to create the proof witness.</p>
                 </div>
                 <span className="status-chip private">Private</span>
               </div>
@@ -789,7 +791,7 @@ export default function App() {
                   <h3>Your public receipt appears here.</h3>
                   <p>
                     Verify the issuer and generate a proof. Commercial terms
-                    remain on this device.
+                    are not logged, persisted, or published on-chain.
                   </p>
                 </div>
               ) : (
@@ -797,8 +799,8 @@ export default function App() {
                   <div className="proof-success">
                     <span><CheckIcon /></span>
                     <div>
-                      <strong>Proof verified locally</strong>
-                      <small>Noir · UltraHonk · EVM target</small>
+                      <strong>Proof verified inside Phala</strong>
+                      <small>Noir · UltraHonk · attested TEE</small>
                     </div>
                   </div>
                   <dl>
