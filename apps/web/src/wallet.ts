@@ -1,4 +1,6 @@
 import {
+  createWalletClient,
+  custom,
   defineChain,
   type Address,
   type EIP1193Provider,
@@ -44,7 +46,7 @@ type Eip6963ProviderDetail = {
   provider: InjectedProvider;
 };
 
-export type BrowserWallet = {
+type BrowserWallet = {
   id: string;
   name: string;
   rdns: string;
@@ -62,6 +64,11 @@ declare global {
 
 let activeProvider: InjectedProvider | undefined;
 let discoveredWallets: DiscoveredWallet[] = [];
+
+export function disconnectBrowserWallet() {
+  activeProvider = undefined;
+  discoveredWallets = [];
+}
 
 function legacyProviders() {
   const injected = window.ethereum;
@@ -103,15 +110,9 @@ async function discoverWallets(): Promise<DiscoveredWallet[]> {
   return wallets;
 }
 
-export async function listBrowserWallets(): Promise<BrowserWallet[]> {
-  discoveredWallets = await discoverWallets();
-  return discoveredWallets.map(({ id, name, rdns }) => ({ id, name, rdns }));
-}
-
-async function injectedProvider(walletId?: string): Promise<InjectedProvider> {
-  if (walletId) {
-    if (!discoveredWallets.length) discoveredWallets = await discoverWallets();
-    activeProvider = discoveredWallets.find(({ id }) => id === walletId)?.provider;
+async function injectedProvider(): Promise<InjectedProvider> {
+  if (!activeProvider) {
+    activeProvider = window.ethereum;
   }
 
   if (!activeProvider) {
@@ -126,6 +127,10 @@ async function injectedProvider(walletId?: string): Promise<InjectedProvider> {
   }
 
   return activeProvider;
+}
+
+export function activeWalletProvider(): Promise<EIP1193Provider> {
+  return injectedProvider();
 }
 
 async function withWalletTimeout<T>(request: Promise<T>): Promise<T> {
@@ -158,8 +163,8 @@ function connectionError(error: ProviderError) {
   return error.message || "The wallet could not be connected.";
 }
 
-export async function connectBrowserWallet(walletId?: string): Promise<Address> {
-  const provider = await injectedProvider(walletId);
+export async function connectBrowserWallet(): Promise<Address> {
+  const provider = await injectedProvider();
   let accounts: unknown;
 
   try {
@@ -183,6 +188,31 @@ export async function connectBrowserWallet(walletId?: string): Promise<Address> 
   }
 
   return account as Address;
+}
+
+export async function signWalletMessage(
+  message: string,
+  address: Address,
+): Promise<`0x${string}`> {
+  const provider = await injectedProvider();
+  try {
+    const signature = await withWalletTimeout(
+      createWalletClient({ transport: custom(provider) }).signMessage({
+        account: address,
+        message,
+      }),
+    );
+    if (typeof signature !== "string" || !/^0x[a-fA-F0-9]+$/.test(signature)) {
+      throw new Error("The wallet returned an invalid signature.");
+    }
+    return signature as `0x${string}`;
+  } catch (caught) {
+    if (caught instanceof WalletRequestTimeoutError) {
+      throw new Error("The wallet did not respond to the signature request.");
+    }
+    const error = caught as ProviderError;
+    throw new Error(connectionError(error));
+  }
 }
 
 export async function switchToMonadTestnet(): Promise<void> {

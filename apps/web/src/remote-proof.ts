@@ -11,6 +11,17 @@ export type BrowserProof = {
   commitment: `0x${string}`;
   nullifier: `0x${string}`;
   verifiedLocally: boolean;
+  attestation?: {
+    verified: boolean;
+    environment?: string;
+    checksum?: string;
+    teeType?: string;
+    reportData?: string;
+    mrtd?: string;
+    rtmr0?: string;
+    verificationUrl?: string;
+    message?: string;
+  };
 };
 
 const proverUrl =
