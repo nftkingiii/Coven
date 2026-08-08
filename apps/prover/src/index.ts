@@ -18,6 +18,22 @@ const allowedOrigins = new Set(
 );
 type Circuit = ConstructorParameters<typeof Noir>[0];
 type Hex = `0x${string}`;
+type AttestationVerification = {
+  success?: boolean;
+  checksum?: string;
+  quote?: {
+    verified?: boolean;
+    header?: { tee_type?: string; user_data?: string };
+    body?: {
+      mrtd?: string;
+      rtmr0?: string;
+      rtmr1?: string;
+      rtmr2?: string;
+      rtmr3?: string;
+      report_data?: string;
+    };
+  };
+};
 let proving = false;
 let apiPromise: ReturnType<typeof Barretenberg.new> | undefined;
 
@@ -64,6 +80,57 @@ function asFieldHex(value: string): Hex {
   return `0x${normalized.padStart(64, "0")}`;
 }
 
+async function createVerifiedAttestation(reportData: Buffer) {
+  if (
+    process.env.PHALA_CVM !== "true" &&
+    !process.env.DSTACK_SIMULATOR_ENDPOINT
+  ) {
+    return {
+      verified: false,
+      environment: "local",
+      message: "Remote attestation is available when this prover runs in Phala.",
+    };
+  }
+
+  const { DstackClient } = await import("@phala/dstack-sdk");
+  const client = new DstackClient();
+  const quoteResult = await client.getQuote(reportData);
+  const verificationResponse = await fetch(
+    "https://cloud-api.phala.com/api/v1/attestations/verify",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ hex: quoteResult.quote }),
+      signal: AbortSignal.timeout(20_000),
+    },
+  );
+  const verification =
+    (await verificationResponse.json()) as AttestationVerification;
+  if (!verificationResponse.ok) {
+    throw new Error("Phala attestation verification service rejected the quote.");
+  }
+
+  const checksum = verification.checksum;
+  return {
+    verified:
+      verification.success === true &&
+      verification.quote?.verified !== false,
+    environment: process.env.DSTACK_SIMULATOR_ENDPOINT
+      ? "simulator"
+      : "phala-cvm",
+    checksum,
+    teeType: verification.quote?.header?.tee_type,
+    reportData:
+      verification.quote?.body?.report_data ??
+      verification.quote?.header?.user_data,
+    mrtd: verification.quote?.body?.mrtd,
+    rtmr0: verification.quote?.body?.rtmr0,
+    verificationUrl: checksum
+      ? `https://proof.t16z.com/reports/${checksum}`
+      : undefined,
+  };
+}
+
 const proofRequest = z.object({
   invoiceId: z.string().trim().min(1).max(128),
   invoiceValue: z.string().regex(/^[1-9]\d{0,5}$/),
@@ -98,6 +165,24 @@ app.get("/attestation", async (_request, response) => {
   } catch {
     response.status(503).json({
       error: "Attestation is available only inside a Phala CVM or simulator.",
+    });
+  }
+});
+
+app.get("/attestation/verified", async (_request, response) => {
+  try {
+    const challenge = createHash("sha256")
+      .update(`coven-health:${Date.now()}`)
+      .digest();
+    response.setHeader("cache-control", "no-store");
+    response.json(await createVerifiedAttestation(challenge));
+  } catch (error) {
+    response.status(503).json({
+      verified: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Attestation verification failed.",
     });
   }
 });
@@ -151,6 +236,20 @@ app.post("/prove/invoice", async (request, response) => {
     if (!verified || publicInputs.length !== 4) {
       throw new Error("Generated proof did not pass local verification.");
     }
+    const attestationBinding = createHash("sha256")
+      .update(`${publicInputs[2]}:${publicInputs[3]}`)
+      .digest();
+    const attestation = await createVerifiedAttestation(
+      attestationBinding,
+    ).catch((error) => ({
+      verified: false,
+      environment:
+        process.env.PHALA_CVM === "true" ? "phala-cvm" : "local",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Attestation verification failed.",
+    }));
 
     response.setHeader("cache-control", "no-store");
     response.json({
@@ -161,6 +260,7 @@ app.post("/prove/invoice", async (request, response) => {
       verifiedLocally: true,
       prover: "phala-tee",
       elapsedMs: Date.now() - startedAt,
+      attestation,
     });
   } catch (error) {
     console.error(
