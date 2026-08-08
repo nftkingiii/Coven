@@ -21,22 +21,67 @@ function encrypt(payload: unknown) {
   ]).toString("base64");
 }
 
-async function request(path: string, body: unknown) {
+type CleanverseEnvelope = {
+  code?: string;
+  message?: string;
+  data?: unknown;
+};
+
+export class CleanverseApiError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly httpStatus?: number,
+  ) {
+    super(message);
+    this.name = "CleanverseApiError";
+  }
+}
+
+async function request(
+  path: string,
+  body?: unknown,
+  method: "GET" | "POST" = "POST",
+) {
   const response = await fetch(`${baseUrl}${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json", "api-id": apiId() },
-    body: JSON.stringify(body),
+    method,
+    headers: {
+      "content-type": "application/json",
+      "api-id": apiId(),
+      "x-request-id": crypto.randomUUID(),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(12_000),
   });
-  const result = await response.json().catch(() => null);
+  const result = (await response.json().catch(() => null)) as
+    | CleanverseEnvelope
+    | null;
   if (!response.ok) {
-    throw new Error(`Cleanverse ${response.status}: ${JSON.stringify(result)}`);
+    throw new CleanverseApiError(
+      `Cleanverse ${response.status}: ${JSON.stringify(result)}`,
+      result?.code,
+      response.status,
+    );
   }
-  return result;
+  if (result?.code && result.code !== "0000") {
+    throw new CleanverseApiError(
+      `Cleanverse ${result.code}: ${result.message || "Request failed"}`,
+      result.code,
+      response.status,
+    );
+  }
+  return result?.data ?? result;
 }
 
 export function queryApass(chain: string, address: string) {
   return request("/query_apass", { chain, address });
+}
+
+export function generateApass(input: unknown) {
+  if (process.env.CLEANVERSE_WRITE_ENABLED !== "true") {
+    throw new Error("Cleanverse writes are disabled");
+  }
+  return request("/generate_apass", { data: encrypt(input) });
 }
 
 export function launchAtoken(input: unknown) {
@@ -46,5 +91,40 @@ export function launchAtoken(input: unknown) {
   return request("/atoken/launch", { data: encrypt(input) });
 }
 
-export const cleanverseConfigured = () => Boolean(process.env.CLEANVERSE_API_ID);
+export function queryAtokenApplyStatus(requestId: string) {
+  return request(
+    `/atoken/query_apply_status/${encodeURIComponent(requestId)}`,
+    undefined,
+    "GET",
+  );
+}
 
+export function verifyApassForAtoken(
+  chain: string,
+  atoken: string,
+  address: string,
+) {
+  return request("/verify_apass", { chain, atoken, address });
+}
+
+export function cleanverseConfiguration() {
+  const apiIdConfigured = Boolean(process.env.CLEANVERSE_API_ID?.trim());
+  const encodedKey = process.env.CLEANVERSE_API_KEY?.trim();
+  let apiKeyConfigured = false;
+
+  if (encodedKey) {
+    try {
+      apiKeyConfigured = Buffer.from(encodedKey, "base64").length === 32;
+    } catch {
+      apiKeyConfigured = false;
+    }
+  }
+
+  return {
+    configured: apiIdConfigured && apiKeyConfigured,
+    apiIdConfigured,
+    apiKeyConfigured,
+  };
+}
+
+export const cleanverseConfigured = () => cleanverseConfiguration().configured;
