@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "concurrently -n web,api -c cyan,magenta \"npm run dev -w @coven/web\" \"npm run dev -w @coven/api\"",
     "build": "npm run build -w @coven/api && npm run build -w @coven/prover && npm run build -w @coven/web",
-    "typecheck": "npm run typecheck -w @coven/api && npm run typecheck -w @coven/prover && npm run typecheck -w @coven/web"
+    "typecheck": "npm run typecheck -w @coven/api && npm run typecheck -w @coven/prover && npm run typecheck -w @coven/web",
+    "test": "npm run test -w @coven/api",
+    "start:api": "node apps/api/dist/index.js",
+    "start:web": "node apps/web/server.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
