@@ -84,8 +84,26 @@ export type RegistryHistoryResult = {
   warning?: string;
 };
 
-// On-chain-confirmed Coven issuance used as the durable index checkpoint.
-const registryCheckpoint: RegistryHistoryRecord = {
+// On-chain-confirmed Coven issuances retained as durable index checkpoints.
+// Public RPCs cap log ranges, so a cold scan begins near the newest checkpoint.
+// These records preserve confirmed receipts that predate that scan window.
+const registryCheckpoints: RegistryHistoryRecord[] = [
+  {
+    transactionHash:
+      "0xd18129eda099b71db87e84bf8c72f0c8724f945ba49467824c9e0a16acc7c586",
+    registryAddress,
+    assetAddress: getAddress("0xdFf72480344D28cA7d9242ce80B9c61fD8Af8b7E"),
+    commitment:
+      "0x1fa06287aa4fc55bf773ba6bcd606e73cba5ea68bae64509cfb67409a41f88d4",
+    nullifier:
+      "0x037d2f17bec3988916e445d2d5f78596613ed5d47c4af6ba0cd27aa233a1be01",
+    issuer: getAddress("0xC6CFa54eDA215a62fD5495A9B6555Bd85b6B7ddB"),
+    issuedAt: 1785999530,
+    blockNumber: "51319585",
+    explorerUrl:
+      "https://testnet.monadvision.com/tx/0xd18129eda099b71db87e84bf8c72f0c8724f945ba49467824c9e0a16acc7c586",
+  },
+  {
   transactionHash:
     "0x9d752efd02a7079f6416ec16b8e9f54877fc3224b1401b152c497353797d8f77",
   registryAddress,
@@ -99,7 +117,8 @@ const registryCheckpoint: RegistryHistoryRecord = {
   blockNumber: "51365838",
   explorerUrl:
     "https://testnet.monadvision.com/tx/0x9d752efd02a7079f6416ec16b8e9f54877fc3224b1401b152c497353797d8f77",
-};
+  },
+];
 
 const historyCache = new Map<
   string,
@@ -161,17 +180,24 @@ export function registryHistorySnapshot(
 ): RegistryHistoryResult {
   const cacheKey = account?.toLowerCase() || "all";
   const cached = historyCache.get(cacheKey);
-  const checkpointRecords =
-    !account || registryCheckpoint.issuer.toLowerCase() === account.toLowerCase()
-      ? [registryCheckpoint]
-      : [];
+  const checkpointRecords = registryCheckpoints.filter(
+    (record) => !account || record.issuer.toLowerCase() === account.toLowerCase(),
+  );
   return {
     records: mergeRegistryRecords(cached?.records || [], checkpointRecords),
     stale: false,
     ...(cached
       ? { syncedToBlock: cached.scannedToBlock.toString() }
       : checkpointRecords.length > 0
-        ? { syncedToBlock: registryCheckpoint.blockNumber }
+        ? {
+            syncedToBlock: checkpointRecords
+              .reduce((latest, record) =>
+                BigInt(record.blockNumber) > BigInt(latest.blockNumber)
+                  ? record
+                  : latest,
+              )
+              .blockNumber,
+          }
         : {}),
   };
 }
@@ -191,7 +217,11 @@ export async function loadRegistryHistory(
 
   try {
     const latestBlock = await readClient.getBlockNumber();
-    const checkpointBlock = BigInt(registryCheckpoint.blockNumber);
+    const checkpointBlock = registryCheckpoints.reduce(
+      (latest, record) =>
+        BigInt(record.blockNumber) > latest ? BigInt(record.blockNumber) : latest,
+      deploymentBlock,
+    );
     const firstUnindexedBlock =
       checkpointBlock >= deploymentBlock
         ? checkpointBlock + 1n

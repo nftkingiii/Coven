@@ -49,9 +49,20 @@ test("durable registry records survive refreshes without duplicates", () => {
 
 test("the confirmed registry checkpoint is available without an RPC scan", () => {
   const snapshot = registryHistorySnapshot();
-  assert.equal(snapshot.records.length, 1);
+  assert.equal(snapshot.records.length, 2);
   assert.equal(
     snapshot.records[0].assetAddress,
     "0xE821F58B1F393A46cc3Cd9ba420A19c2ef62a2ec",
+  );
+});
+
+test("the original deployer receipt is available without an RPC scan", () => {
+  const snapshot = registryHistorySnapshot(
+    "0xC6CFa54eDA215a62fD5495A9B6555Bd85b6B7ddB" as Address,
+  );
+  assert.equal(snapshot.records.length, 1);
+  assert.equal(
+    snapshot.records[0].transactionHash,
+    "0xd18129eda099b71db87e84bf8c72f0c8724f945ba49467824c9e0a16acc7c586",
   );
 });
