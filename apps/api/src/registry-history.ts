@@ -90,6 +90,21 @@ export type RegistryHistoryResult = {
 const registryCheckpoints: RegistryHistoryRecord[] = [
   {
     transactionHash:
+      "0x9bef0f620cec4d94963ed9f8057d569543172356b599ae6a4f1058418913798e",
+    registryAddress,
+    assetAddress: getAddress("0xdaAA73CE2d7F960715426A9b9d9b4346653d8ef7"),
+    commitment:
+      "0x17a9c17178c16c8dcd9ca2be2adbacb8b78dacd4a8adc44a7676240985d37203",
+    nullifier:
+      "0x0672b317306c4d0426cdcd4f5fc6d584eff8f024ab1016850dc3d6c739f2eb0a",
+    issuer: getAddress("0xa64c3723aE520Dfd628F8a896C2E3890d8d4412b"),
+    issuedAt: 1786245257,
+    blockNumber: "52126527",
+    explorerUrl:
+      "https://testnet.monadvision.com/tx/0x9bef0f620cec4d94963ed9f8057d569543172356b599ae6a4f1058418913798e",
+  },
+  {
+    transactionHash:
       "0xd18129eda099b71db87e84bf8c72f0c8724f945ba49467824c9e0a16acc7c586",
     registryAddress,
     assetAddress: getAddress("0xdFf72480344D28cA7d9242ce80B9c61fD8Af8b7E"),

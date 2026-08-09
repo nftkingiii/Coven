@@ -2,6 +2,7 @@ import {
   createPublicClient,
   createWalletClient,
   custom,
+  fallback,
   formatUnits,
   http,
   keccak256,
@@ -141,9 +142,17 @@ type ProviderError = Error & {
 };
 
 function publicClient() {
+  const primaryRpc = monadTestnet.rpcUrls.default.http[0];
+  const historyRpc =
+    import.meta.env.VITE_MONAD_HISTORY_RPC_URL ||
+    "https://monad-testnet.drpc.org";
   return createPublicClient({
     chain: monadTestnet,
-    transport: http(monadTestnet.rpcUrls.default.http[0]),
+    transport: fallback([
+      http(primaryRpc, { retryCount: 1, timeout: 12_000 }),
+      http(historyRpc, { retryCount: 1, timeout: 12_000 }),
+      http("https://10143.rpc.thirdweb.com", { retryCount: 1, timeout: 12_000 }),
+    ]),
   });
 }
 

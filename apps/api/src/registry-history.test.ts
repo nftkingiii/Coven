@@ -49,10 +49,21 @@ test("durable registry records survive refreshes without duplicates", () => {
 
 test("the confirmed registry checkpoint is available without an RPC scan", () => {
   const snapshot = registryHistorySnapshot();
-  assert.equal(snapshot.records.length, 2);
+  assert.equal(snapshot.records.length, 3);
   assert.equal(
     snapshot.records[0].assetAddress,
-    "0xE821F58B1F393A46cc3Cd9ba420A19c2ef62a2ec",
+    "0xdaAA73CE2d7F960715426A9b9d9b4346653d8ef7",
+  );
+});
+
+test("the second CVA transferred to the deployer remains discoverable", () => {
+  const snapshot = registryHistorySnapshot();
+  assert.ok(
+    snapshot.records.some(
+      (record) =>
+        record.assetAddress.toLowerCase() ===
+        "0xdaaa73ce2d7f960715426a9b9d9b4346653d8ef7",
+    ),
   );
 });
 
