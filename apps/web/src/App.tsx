@@ -1118,6 +1118,12 @@ function AssetsView({
       (record) => record.transactionHash !== currentReceipt?.transactionHash,
     ),
   ];
+  const discoverableRecords = [
+    ...(registryReceipt ? [registryReceipt] : []),
+    ...registryHistory.filter(
+      (record) => record.transactionHash !== registryReceipt?.transactionHash,
+    ),
+  ];
   const selectedAsset = currentReceipt?.assetAddress || records[0]?.assetAddress;
 
   return (
@@ -1139,7 +1145,7 @@ function AssetsView({
 
       <InvestorPortfolio
         wallet={wallet}
-        records={records}
+        records={discoverableRecords}
         registryLoading={historyBusy}
         registryNotice={historyError}
       />
