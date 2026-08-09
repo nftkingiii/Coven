@@ -107,6 +107,16 @@ function registryConfigured() {
   return Boolean(value && isEvmAddress(value));
 }
 
+function recordsIssuedBy(
+  records: RegistryReceipt[],
+  wallet: string,
+) {
+  if (!isEvmAddress(wallet)) return [];
+  return records.filter(
+    (record) => record.issuer.toLowerCase() === wallet.toLowerCase(),
+  );
+}
+
 function cleanverseReceipt(value: IssuanceResult | null) {
   if (!value) return "";
   for (const key of ["txHash", "requestId", "hash", "message"]) {
@@ -313,6 +323,7 @@ function ProofsView({
   historyBusy,
   historyError,
   invoiceId,
+  wallet,
   openIssuance,
 }: {
   proof: BrowserProof | null;
@@ -321,9 +332,10 @@ function ProofsView({
   historyBusy: boolean;
   historyError: string;
   invoiceId: string;
+  wallet: string;
   openIssuance: () => void;
 }) {
-  const historicalReceipts = registryHistory.filter(
+  const historicalReceipts = recordsIssuedBy(registryHistory, wallet).filter(
     (record) => record.transactionHash !== registryReceipt?.transactionHash,
   );
   const receiptCount = historicalReceipts.length + (proof ? 1 : 0);
@@ -1093,13 +1105,20 @@ function AssetsView({
   openIssuance: () => void;
 }) {
   const receipt = cleanverseReceipt(issuance);
+  const issuerRecords = recordsIssuedBy(registryHistory, wallet);
+  const currentReceipt =
+    registryReceipt &&
+    isEvmAddress(wallet) &&
+    registryReceipt.issuer.toLowerCase() === wallet.toLowerCase()
+      ? registryReceipt
+      : null;
   const records = [
-    ...(registryReceipt ? [registryReceipt] : []),
-    ...registryHistory.filter(
-      (record) => record.transactionHash !== registryReceipt?.transactionHash,
+    ...(currentReceipt ? [currentReceipt] : []),
+    ...issuerRecords.filter(
+      (record) => record.transactionHash !== currentReceipt?.transactionHash,
     ),
   ];
-  const selectedAsset = registryReceipt?.assetAddress || records[0]?.assetAddress;
+  const selectedAsset = currentReceipt?.assetAddress || records[0]?.assetAddress;
 
   return (
     <section className="records-view">
@@ -1126,7 +1145,7 @@ function AssetsView({
       />
 
       {records.map((record, index) => {
-        const isCurrent = record.transactionHash === registryReceipt?.transactionHash;
+        const isCurrent = record.transactionHash === currentReceipt?.transactionHash;
         return (
           <article className="asset-record" key={record.transactionHash}>
             <div className="asset-record-mark">CVN</div>
@@ -1841,6 +1860,7 @@ export default function App() {
             historyBusy={historyBusy}
             historyError={historyError}
             invoiceId={invoiceId}
+            wallet={wallet}
             openIssuance={() => setDeskTab("issuance")}
           />
         ) : deskTab === "assets" ? (

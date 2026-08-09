@@ -36,6 +36,7 @@ type InjectedProvider = EIP1193Provider & {
 
 type ProviderError = Error & { code?: number };
 class WalletRequestTimeoutError extends Error {}
+const walletRequestTimeoutMs = 60_000;
 
 type Eip6963ProviderDetail = {
   info: {
@@ -141,7 +142,7 @@ async function withWalletTimeout<T>(request: Promise<T>): Promise<T> {
       new Promise<never>((_resolve, reject) => {
         timeout = window.setTimeout(
           () => reject(new WalletRequestTimeoutError()),
-          20_000,
+          walletRequestTimeoutMs,
         );
       }),
     ]);
