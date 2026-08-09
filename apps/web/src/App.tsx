@@ -1143,13 +1143,6 @@ function AssetsView({
         </div>
       </div>
 
-      <InvestorPortfolio
-        wallet={wallet}
-        records={discoverableRecords}
-        registryLoading={historyBusy}
-        registryNotice={historyError}
-      />
-
       {records.map((record, index) => {
         const isCurrent = record.transactionHash === currentReceipt?.transactionHash;
         return (
@@ -1220,6 +1213,13 @@ function AssetsView({
           </button>
         </div>
       )}
+
+      <InvestorPortfolio
+        wallet={wallet}
+        records={discoverableRecords}
+        registryLoading={historyBusy}
+        registryNotice={historyError}
+      />
 
       <CvaFinancingDesk assetAddress={selectedAsset} wallet={wallet} />
     </section>
