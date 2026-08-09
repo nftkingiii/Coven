@@ -2,7 +2,11 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import type { Address } from "viem";
 import type { CvaActionReceipt, CvaSnapshot, InvestorHolding } from "./cva";
 import type { BrowserProof } from "./remote-proof";
-import type { RegistryReceipt } from "./registry";
+import {
+  assertIssuanceReady,
+  registerCvaOnMonad,
+  type RegistryReceipt,
+} from "./registry";
 import {
   connectBrowserWallet,
   disconnectBrowserWallet,
@@ -1577,8 +1581,6 @@ export default function App() {
         );
       }
 
-      const { assertIssuanceReady, registerCvaOnMonad } =
-        await import("./registry");
       setIssuanceProgress("Checking CCP identity and replay protection on Monad");
       await assertIssuanceReady(wallet as Address, proof.nullifier);
 
