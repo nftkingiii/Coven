@@ -110,7 +110,12 @@ contract CovenRegistryTest {
 
     function testOwnerCanManageComplianceRules() public {
         IAPassComplianceValidator.RuleV2 memory rule = IAPassComplianceValidator.RuleV2({
-            allowedGroup: bytes2("IN"), allowedSubGroup: bytes2(0), minTier: 30, minSubTier: 0, poolCountryBitmap: 0
+            allowedGroup: bytes2("IN"),
+            allowedSubGroup: bytes2(0),
+            minTier: 30,
+            minSubTier: 0,
+            isBlackList: false,
+            countryBitmap: 0
         });
         registry.setComplianceRule(rule);
         IAPassComplianceValidator.RuleV2[] memory rules = registry.getComplianceRules();

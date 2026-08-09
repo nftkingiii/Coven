@@ -8,7 +8,8 @@ interface IAPassComplianceValidator {
         bytes2 allowedSubGroup;
         uint8 minTier;
         uint8 minSubTier;
-        uint256 poolCountryBitmap;
+        bool isBlackList;
+        uint256 countryBitmap;
     }
 
     function complianceVerify(address poolAddress, address userAddress) external view returns (bool);

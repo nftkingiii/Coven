@@ -20,7 +20,9 @@ to `HonkVerifier` at `0x312630B939a56700650b013C2828203bE1Abf0A1`.
 Deployment and constructor wiring are RPC-verified. The user-flow and live CCP
 registration are now verified: Cleanverse registered the pool in transaction
 `0x60bf9167072a790c2fc37fd8a48d43f98def00314b96f70f493e27e8e50a83fe`,
-and Monad read-back confirms the tier-20 RuleV2 plus positive and negative
+and Monad read-back confirms the six-field RuleV2: `allowedGroup=0x0000`,
+`allowedSubGroup=0x0000`, `minTier=20`, `minSubTier=0`,
+`isBlackList=false`, and `countryBitmap=0`, plus positive and negative
 compliance results. The complete issuance row is verified by wallet transaction
 `0xd18129eda099b71db87e84bf8c72f0c8724f945ba49467824c9e0a16acc7c586`,
 whose `InvoiceIssued` event resolves to CVA

@@ -52,6 +52,8 @@ allocates the claim but does not move an investor payment token.
   `POST /api/cooperate/validator/register` using the owner-signature procedure.
 - The owner then configures RuleV2 through `setComplianceRule`; additional OR
   paths can be added with `addComplianceRule`.
-- The deployed registry is registered with Cleanverse and has a live tier-20
-  RuleV2. Positive and negative compliance reads plus a wallet-issued registry
-  receipt are preserved in the proof matrix.
+- The active RuleV2 is explicitly `allowedGroup=0x0000`,
+  `allowedSubGroup=0x0000`, `minTier=20`, `minSubTier=0`,
+  `isBlackList=false`, and `countryBitmap=0` (no group, sub-group, blacklist,
+  or country restriction). Positive and negative compliance reads plus a
+  wallet-issued registry receipt are preserved in the proof matrix.

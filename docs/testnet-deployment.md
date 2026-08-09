@@ -73,9 +73,11 @@ Cleanverse validator `0xaC7e5179C2C7f03f209136886c172eb34F161792`, and policy co
 and `180`. This proves deployment and constructor configuration only; it does
 not yet prove Cleanverse registration, RuleV2 activation, or a live issuance.
 
-The initial registration rule is active CVI tier `20` or higher, with no group,
-sub-group, or country restriction. This matches the deployed owner's live
-sandbox A-Pass attributes while retaining a meaningful verified-identity gate.
+The initial registration rule is the complete six-field RuleV2:
+`allowedGroup=0x0000`, `allowedSubGroup=0x0000`, `minTier=20`,
+`minSubTier=0`, `isBlackList=false`, and `countryBitmap=0`. It permits any
+group, sub-group, and country while retaining a meaningful tier-20
+verified-identity gate.
 
 Sign the exact lowercase EIP-191 message and submit the encrypted registration:
 
@@ -95,8 +97,9 @@ both linked libraries returned `exact_match`; the linked Honk verifier returned
 - Transcript library: `80016847-2ffd-4e3d-8025-fcb351f97159`
 
 Cleanverse and Monad read-back both confirm the pool is registered with one
-RuleV2 entry: empty group and sub-group, minimum tier `20`, minimum sub-tier
-`0`, and no country restriction. `isIssuerCompliant` returns `true` for the
+six-field RuleV2 entry: `allowedGroup=0x0000`, `allowedSubGroup=0x0000`,
+`minTier=20`, `minSubTier=0`, `isBlackList=false`, and `countryBitmap=0`.
+`isIssuerCompliant` returns `true` for the
 active tier-20 owner and `false` for fresh address
 `0x6e281ec756978a0bca15c1bd78d4ae6548e4ef52`, for which `query_apass` returns
 no A-Pass. Common placeholder addresses such as `0x111...` are not valid
