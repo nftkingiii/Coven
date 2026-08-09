@@ -1363,6 +1363,7 @@ export default function App() {
       try {
         await switchToMonadTestnet();
         setNetworkReady(true);
+        await verifyIdentity(account, true);
       } catch (caught) {
         setNetworkReady(false);
         setWalletError(
@@ -1414,14 +1415,20 @@ export default function App() {
     }
   }
 
-  async function verifyIdentity() {
+  async function verifyIdentity(address = wallet, automatic = false) {
+    if (!isEvmAddress(address)) return;
     setBusy("cvi");
-    setError("");
+    if (automatic) {
+      setCviProgress("Checking Cleanverse CVI for this wallet");
+    } else {
+      setError("");
+      setCviProgress("");
+    }
     try {
       const response = await fetch(`${apiUrl}/api/compliance/cvi`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ chain: "monad", address: wallet }),
+        body: JSON.stringify({ chain: "monad", address }),
       });
       const result = await response.json();
       if (response.status === 404 && result.code === "CVI_NOT_FOUND") {
@@ -1436,12 +1443,16 @@ export default function App() {
       if (!response.ok) throw new Error(result.error);
       setCvi(result);
       setCviMissing(false);
-      setCviProgress("");
+      setCviProgress(automatic ? "Cleanverse CVI active" : "");
       setProof(null);
       setIssuance(null);
       setRegistryReceipt(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Verification failed");
+      if (automatic) {
+        setCviProgress("CVI status is unavailable. Use Check CVI to retry.");
+      } else {
+        setError(caught instanceof Error ? caught.message : "Verification failed");
+      }
     } finally {
       setBusy("");
     }
@@ -1933,7 +1944,7 @@ export default function App() {
                   <button
                     className="button button-outline"
                     disabled={!!busy || !networkReady}
-                    onClick={verifyIdentity}
+                    onClick={() => void verifyIdentity()}
                   >
                     {busy === "cvi"
                       ? "Checking…"
