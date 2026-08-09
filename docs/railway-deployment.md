@@ -36,11 +36,18 @@ MONAD_HISTORY_RPC_URL=https://monad-testnet.drpc.org
 MONAD_EXPLORER_URL=https://testnet.monadvision.com
 COVEN_REGISTRY_ADDRESS=0xb5bdc630f78BEB587235C42e4fD4b6c67Fd1d65a
 COVEN_REGISTRY_DEPLOYMENT_BLOCK=51305108
+DATABASE_URL=${{Postgres.DATABASE_URL}}
 ```
 
 `CLEANVERSE_API_ID` and `CLEANVERSE_API_KEY` are secrets. Never add them to the web service, a `VITE_*` variable, source control, screenshots, or a demo recording.
 
-The API liveness endpoint is `/api/health`. The readiness endpoint is `/api/ready`; it fails deployment promotion when credentials or the production CORS allowlist are missing. It does not depend on temporary Cleanverse or RPC availability.
+Add a Railway PostgreSQL service named `Postgres` to the same project, then set
+`DATABASE_URL` as the Railway service reference shown above (not by copying its
+value into source control). Coven stores only public Monad receipt fields and
+its scan cursor there; no private invoice data or Cleanverse credentials enter
+the database.
+
+The API liveness endpoint is `/api/health`. The readiness endpoint is `/api/ready`; it fails deployment promotion when credentials, persistent registry storage, or the production CORS allowlist are missing. It does not depend on temporary Cleanverse or RPC availability.
 
 ## 3. Configure `coven-web`
 

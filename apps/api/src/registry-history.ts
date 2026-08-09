@@ -7,6 +7,12 @@ import {
   type Address,
   type Hex,
 } from "viem";
+import {
+  readRegistryScanCursor,
+  readStoredRegistryRecords,
+  upsertStoredRegistryRecords,
+  writeRegistryScanCursor,
+} from "./registry-store.js";
 
 const registryAbi = [
   {
@@ -52,6 +58,7 @@ const officialRpcUrl = "https://testnet-rpc.monad.xyz";
 const secondaryRpcUrl = "https://monad-testnet.drpc.org";
 const logBlockWindow = 100n;
 const logScanConcurrency = 2;
+const maxLogRangesPerRefresh = 10n;
 const rpcTimeoutMs = 8_000;
 
 type RegistryIssuanceEvent = {
@@ -226,42 +233,45 @@ export async function loadRegistryHistory(
 ): Promise<RegistryHistoryResult> {
   const readClient = resilientClient(readRpcUrls);
   const historyClient = resilientClient(historyRpcUrls);
-  const cacheKey = account?.toLowerCase() || "all";
+  const cacheKey = "all";
   const cached = historyCache.get(cacheKey);
-  const durableRecords = registryHistorySnapshot(account).records;
+  const checkpointRecords = registryHistorySnapshot().records;
 
   try {
+    // PostgreSQL stores only public chain receipts. It is deliberately optional
+    // for local development, but persistent in Railway so restarts do not lose
+    // the registry index or force every wallet through a cold RPC scan.
+    await upsertStoredRegistryRecords(checkpointRecords);
+    const storedRecords = await readStoredRegistryRecords(registryAddress);
+    const durableRecords = mergeRegistryRecords(storedRecords, checkpointRecords);
     const latestBlock = await readClient.getBlockNumber();
-    const checkpointBlock = registryCheckpoints.reduce(
-      (latest, record) =>
-        BigInt(record.blockNumber) > latest ? BigInt(record.blockNumber) : latest,
-      deploymentBlock,
-    );
-    const firstUnindexedBlock =
-      checkpointBlock >= deploymentBlock
-        ? checkpointBlock + 1n
-        : deploymentBlock;
     const recentWindowStart =
       latestBlock >= logBlockWindow ? latestBlock - logBlockWindow + 1n : 0n;
-    // Keep cold starts fast and inside public-RPC limits. Once warm, the cache
-    // advances continuously from its previous high-water mark.
-    const initialScanStart =
-      recentWindowStart > firstUnindexedBlock
-        ? recentWindowStart
-        : firstUnindexedBlock;
-    const scanStart = cached ? cached.scannedToBlock + 1n : initialScanStart;
+    const storedCursor = await readRegistryScanCursor(registryAddress);
+    // On its first run, index the current public-RPC window and persist that
+    // point. Later refreshes continue exactly from the saved high-water mark.
+    // Historical receipts are seeded above from confirmed checkpoints.
+    const scanStart = storedCursor
+      ? storedCursor + 1n
+      : cached
+        ? cached.scannedToBlock + 1n
+        : recentWindowStart;
+    const scanEnd =
+      scanStart + logBlockWindow * maxLogRangesPerRefresh - 1n < latestBlock
+        ? scanStart + logBlockWindow * maxLogRangesPerRefresh - 1n
+        : latestBlock;
     const logs: RegistryIssuanceEvent[] = [];
 
     const ranges: Array<{ fromBlock: bigint; toBlock: bigint }> = [];
     for (
       let fromBlock = scanStart;
-      fromBlock <= latestBlock;
+      fromBlock <= scanEnd;
       fromBlock += logBlockWindow
     ) {
       const candidateEnd = fromBlock + logBlockWindow - 1n;
       ranges.push({
         fromBlock,
-        toBlock: candidateEnd < latestBlock ? candidateEnd : latestBlock,
+        toBlock: candidateEnd < scanEnd ? candidateEnd : scanEnd,
       });
     }
     let nextRange = 0;
@@ -280,7 +290,6 @@ export async function loadRegistryHistory(
                   address: registryAddress,
                   abi: registryAbi,
                   eventName: "InvoiceIssued",
-                  ...(account ? { args: { issuer: account } } : {}),
                   ...range,
                   strict: true,
                 })) as RegistryIssuanceEvent[];
@@ -316,14 +325,22 @@ export async function loadRegistryHistory(
       }),
     );
 
+    await upsertStoredRegistryRecords(newRecords);
+    await writeRegistryScanCursor(registryAddress, scanEnd);
     const records = mergeRegistryRecords(newRecords, durableRecords);
-    historyCache.set(cacheKey, { scannedToBlock: latestBlock, records });
+    historyCache.set(cacheKey, { scannedToBlock: scanEnd, records });
+    const scopedRecords = account
+      ? records.filter(
+          (record) => record.issuer.toLowerCase() === account.toLowerCase(),
+        )
+      : records;
     return {
-      records,
+      records: scopedRecords,
       stale: false,
-      syncedToBlock: latestBlock.toString(),
+      syncedToBlock: scanEnd.toString(),
     };
   } catch {
+    const durableRecords = registryHistorySnapshot(account).records;
     return {
       records: durableRecords,
       stale: true,

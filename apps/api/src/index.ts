@@ -16,8 +16,8 @@ import {
 } from "./cleanverse.js";
 import {
   loadRegistryHistory,
-  registryHistorySnapshot,
 } from "./registry-history.js";
+import { registryStoreConfigured } from "./registry-store.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -52,6 +52,7 @@ function readiness() {
   if (!cleanverse.apiIdConfigured) missing.push("CLEANVERSE_API_ID");
   if (!cleanverse.apiKeyConfigured) missing.push("CLEANVERSE_API_KEY");
   if (!process.env.CORS_ORIGINS?.trim()) missing.push("CORS_ORIGINS");
+  if (!registryStoreConfigured()) missing.push("DATABASE_URL");
   return { ready: missing.length === 0, missing };
 }
 
@@ -66,19 +67,6 @@ const cvaLaunchChallenges = new Map<
 >();
 const cviChallengeLifetimeMs = 5 * 60 * 1_000;
 const cviEnrollmentCooldownMs = 30 * 1_000;
-let registryAssetsRefresh: Promise<unknown> | null = null;
-
-function refreshRegistryAssets() {
-  if (registryAssetsRefresh) return;
-  registryAssetsRefresh = loadRegistryHistory()
-    .catch((error) => {
-      console.error("Background registry refresh failed", error);
-    })
-    .finally(() => {
-      registryAssetsRefresh = null;
-    });
-}
-
 function isMissingApass(error: unknown) {
   return (
     error instanceof CleanverseApiError &&
@@ -122,6 +110,7 @@ app.get("/api/health", (_request, response) => {
     service: "coven-api",
     revision,
     cleanverseConfigured: cleanverseConfigured(),
+    registryStoreConfigured: registryStoreConfigured(),
     writesEnabled: process.env.CLEANVERSE_WRITE_ENABLED === "true",
   });
 });
@@ -160,8 +149,7 @@ app.get("/api/registry/history/:address", async (request, response) => {
 
 app.get("/api/registry/assets", async (_request, response) => {
   try {
-    response.json({ ...registryHistorySnapshot(), refreshing: true });
-    refreshRegistryAssets();
+    response.json({ ...(await loadRegistryHistory()), refreshing: false });
   } catch (error) {
     console.error("Registry asset discovery failed", error);
     response.status(502).json({
