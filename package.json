@@ -12,6 +12,6 @@
     "start:web": "node apps/web/server.mjs"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.5"
   }
 }
