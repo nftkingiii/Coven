@@ -11,7 +11,7 @@
     "@aztec/bb.js": "5.0.0-nightly.20260708",
     "@noir-lang/noir_js": "1.0.0-beta.24",
     "@vitejs/plugin-react": "^5.0.2",
-    "vite": "^7.1.4",
+    "vite": "^7.3.7",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "viem": "^2.55.8"
